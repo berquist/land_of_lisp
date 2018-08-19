@@ -1,3 +1,7 @@
+*.dot
+*.png
+*.txt
+
 ### Common Lisp
 
 *.FASL
