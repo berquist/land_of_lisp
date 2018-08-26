@@ -279,7 +279,7 @@ given node."
     (setf *player-pos* pos)
     (draw-known-city)
     (cond ((member 'cops edge) (princ "You ran into the cops. Game Over."))
-          ((member 'wumpus edge) (if charging
+          ((member 'wumpus node) (if charging
                                      (princ "You found the Wumpus!")
                                      (princ "You ran into the Wumpus")))
           (charging (princ "You wasted your last bullet. Game Over."))
