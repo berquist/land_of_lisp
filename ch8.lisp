@@ -181,3 +181,115 @@ given node."
   (setf *player-pos* (find-empty-node))
   (setf *visited-nodes* (list *player-pos*))
   (draw-city))
+
+;; CL-USER> *congestion-city-nodes*
+;; ((1 LIGHTS!) (2 LIGHTS! SIRENS!) (3 BLOOD! LIGHTS!) (4 SIRENS!) (5 GLOW-WORM) (6 SIRENS!) (7 SIRENS!) (8
+;; BLOOD! SIRENS!) (9) (10 SIRENS!)  (11 BLOOD! SIRENS!) (12) (13 BLOOD!
+;; SIRENS!) (14 SIRENS!)  (15 WUMPUS LIGHTS! SIRENS!) (16) (17 BLOOD!)
+;; (18 SIRENS!) (19 LIGHTS! SIRENS!)  (20 SIRENS!) (21 SIRENS!) (22
+;; BLOOD! GLOW-WORM) (23 BLOOD! LIGHTS!) (24) (25 BLOOD!) (26 LIGHTS!)
+;; (27) (28 GLOW-WORM) (29 SIRENS!) (30 BLOOD! LIGHTS!))
+;; CL-USER> *player-pos*
+;; 16
+;; CL-USER> *congestion-city-edges*
+;; ((29 (6 COPS)) (23 (22)) (4 (20 COPS)) (20 (10 COPS) (4 COPS)) (16 (1) (26))
+;;  (22 (23) (15)) (15 (22) (11 COPS)) (1 (16) (21) (5))
+;;  (14 (12) (8) (7 COPS) (2 COPS)) (8 (10) (14) (24) (11 COPS))
+;;  (6 (29 COPS) (18 COPS)) (25 (18) (11) (7)) (30 (11) (26) (5))
+;;  (18 (25) (6 COPS) (21)) (10 (20 COPS) (8) (19)) (7 (14 COPS) (25) (27))
+;;  (27 (7)) (26 (30) (16) (28)) (28 (2) (26)) (2 (14 COPS) (28) (17))
+;;  (12 (14) (13)) (24 (8) (3)) (5 (1) (3) (30) (19))
+;;  (11 (3) (30) (25) (15 COPS) (13 COPS) (8 COPS) (17)) (17 (2) (11) (19))
+;;  (19 (21 COPS) (10) (5) (17) (3)) (3 (11) (5) (24) (19))
+;;  (13 (11 COPS) (12) (21)) (21 (1) (19 COPS) (18) (13)))
+
+(defun ingredients (order)
+  (mapcan (lambda (burger)
+            (case burger
+              (single '(patty))
+              (double '(patty patty))
+              (double-cheese '(patty patty cheese))))
+          order))
+(ingredients '(single double-cheese double))
+
+(defun known-city-nodes ()
+  ""
+  (mapcar (lambda (node)
+            (if (member node *visited-nodes*)
+                ;; if visited and present, mark with *, otherwise do
+                ;; nothing
+                (let ((n (assoc node *congestion-city-nodes*)))
+                  (if (eql node *player-pos*)
+                      (append n '(*))
+                      n))
+                ;; mark unvisited nodes with ?
+                (list node '?)))
+          ;; for each node in the list of visited nodes, get the nodes
+          ;; connected to it, append them all together, then remove
+          ;; the duplicates
+          (remove-duplicates
+           (append *visited-nodes*
+                   (mapcan (lambda (node)
+                             ;; get the nodes connected to this node
+                             (mapcar #'car
+                                     (cdr (assoc node
+                                                 *congestion-city-edges*))))
+                           *visited-nodes*)))))
+
+(defun known-city-edges ()
+  (mapcar (lambda (node)
+            (cons node (mapcar (lambda (x)
+                                 ;; if the node has been visited, add
+                                 ;; it, otherwise TODO
+                                 (if (member (car x) *visited-nodes*)
+                                     x
+                                     (list (car x))))
+                               (cdr (assoc node *congestion-city-edges*)))))
+            *visited-nodes*))
+
+(defun draw-known-city ()
+  (ugraph->png "known-city" (known-city-nodes) (known-city-edges)))
+
+(defun new-game ()
+  (setf *congestion-city-edges* (make-city-edges))
+  (setf *congestion-city-nodes* (make-city-nodes *congestion-city-edges*))
+  (setf *player-pos* (find-empty-node))
+  (setf *visited-nodes* (list *player-pos*))
+  (draw-city)
+  (draw-known-city))
+
+(defun walk (pos)
+  (handle-direction pos nil))
+
+(defun charge (pos)
+  (handle-direction pos t))
+
+(defun handle-direction (pos charging)
+  (let ((edge (assoc pos
+                     (cdr (assoc *player-pos* *congestion-city-edges*)))))
+    (if edge
+        (handle-new-place edge pos charging)
+        (princ "That location does not exist!"))))
+
+(defun handle-new-place (edge pos charging)
+  (let* ((node (assoc pos *congestion-city-nodes*))
+         (has-worm (and (member 'glow-worm node)
+                        (not (member pos *visited-nodes*)))))
+    (pushnew pos *visited-nodes*)
+    (setf *player-pos* pos)
+    (draw-known-city)
+    (cond ((member 'cops edge) (princ "You ran into the cops. Game Over."))
+          ((member 'wumpus edge) (if charging
+                                     (princ "You found the Wumpus!")
+                                     (princ "You ran into the Wumpus")))
+          (charging (princ "You wasted your last bullet. Game Over."))
+          (has-worm (let ((new-pos (random-node)))
+                      (princ "You ran into a Glow Worm Gang! You're now at ")
+                      (princ new-pos)
+                      (handle-new-place nil new-pos nil))))))
+
+;; This is the map from the book.
+(defparameter *book-congestion-city-nodes*
+  '((8 blood! sirens!) (6 blood! sirens!) (23) (12 blood!) (13) (16 blood! sirens!) (14 blood! sirens!) (9 blood! lights!) (1 blood! glow-worm sirens!) (25 wumpus lights! sirens!) (30 sirens!) (11 blood! lights!) (21 blood! lights!) (22) (15) (7) (5 blood! sirens!) (26 blood!) (17 blood! lights!) (29 sirens!) (10 sirens!) (19 blood! glow-worm) (18 sirens!) (4 blood! lights! sirens!) (3 sirens!) (28 sirens!) (2) (20 lights!) (27 glow-worm) (24)))
+(defparameter *book-congestion-city-edges*
+  '())
